@@ -126,6 +126,54 @@ function createSparks(x, y) {
     }
 }
 
+// Engine Start Sound Generator
+function playEngineStartSound() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const time = audioCtx.currentTime;
+
+    // Engine startup low frequency rev
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(30, time);
+    osc.frequency.exponentialRampToValueAtTime(120, time + 1.5);
+    osc.frequency.linearRampToValueAtTime(80, time + 2.5); // settles object to idle
+
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(0.8, time + 0.5);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, time + 2.5);
+    
+    // Lowpass filter to muffle initial revs
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, time);
+    filter.frequency.exponentialRampToValueAtTime(2000, time + 1.5);
+    filter.frequency.exponentialRampToValueAtTime(500, time + 2.5);
+
+    osc.connect(filter).connect(gainNode).connect(audioCtx.destination);
+    osc.start(time);
+    osc.stop(time + 3);
+
+    // Cyberpunk turbine whine
+    const turbine = audioCtx.createOscillator();
+    const turbineGain = audioCtx.createGain();
+    turbine.type = 'sine';
+    turbine.frequency.setValueAtTime(1000, time);
+    turbine.frequency.exponentialRampToValueAtTime(4000, time + 1.5);
+    turbine.frequency.exponentialRampToValueAtTime(3000, time + 2.5);
+
+    turbineGain.gain.setValueAtTime(0, time);
+    turbineGain.gain.linearRampToValueAtTime(0.1, time + 1.0);
+    turbineGain.gain.exponentialRampToValueAtTime(0.01, time + 2.5);
+
+    turbine.connect(turbineGain).connect(audioCtx.destination);
+    turbine.start(time);
+    turbine.stop(time + 3);
+}
+
 // Ensure flash overlay exists
 let flashOverlay = document.createElement('div');
 flashOverlay.id = 'flash-overlay';
@@ -205,4 +253,48 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 20);
     }
+
+    // --- Audio Event Listeners ---
+    
+    // 1. Hero Section Double Click (Sword Clash)
+    const heroSection = document.getElementById('hero');
+    if (heroSection) {
+        heroSection.addEventListener('dblclick', (e) => {
+            playCyberSwordSound(e.clientX, e.clientY);
+        });
+    }
+
+    // 2. Play Startup Engine Sound automatically
+    let startupSoundPlayed = false;
+
+    // Attempt to play automatically on load
+    window.addEventListener('load', () => {
+        playEngineStartSound();
+        
+        // We check if the browser actually allowed it
+        setTimeout(() => {
+            if (audioCtx && audioCtx.state === 'running') {
+                startupSoundPlayed = true;
+            }
+        }, 500);
+    });
+
+    // Fallback: If the browser blocked auto-play, play on first interaction 
+    const initStartupSound = (e) => {
+        if (!startupSoundPlayed) {
+            const isProjectCard = e.target && e.target.closest && e.target.closest('.project-card');
+            if (!isProjectCard) {
+                // Audio context might be suspended by the browser. Resuming it here.
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                playEngineStartSound();
+            }
+            startupSoundPlayed = true;
+        }
+        document.removeEventListener('click', initStartupSound);
+        document.removeEventListener('keydown', initStartupSound);
+    };
+    document.addEventListener('click', initStartupSound);
+    document.addEventListener('keydown', initStartupSound);
 });
